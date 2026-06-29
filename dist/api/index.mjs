@@ -330,6 +330,63 @@ async function deleteDocuments(credentials, collection, filter, config, layer) {
     config
   );
 }
+function dmPairKey(a, b) {
+  return [a, b].sort().join("::");
+}
+function requireAppScope(config) {
+  const scope = config?.appScope;
+  if (!scope) {
+    throw new Error("Private messaging requires an app scope (built-app context).");
+  }
+  return scope;
+}
+async function listThreads(credentials, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/threads`,
+    { credentials },
+    config
+  );
+}
+async function listMessages(credentials, withUserKey, options, config) {
+  const scope = requireAppScope(config);
+  const params = new URLSearchParams();
+  params.set("with", withUserKey);
+  if (options?.limit) params.set("limit", String(options.limit));
+  if (options?.before) params.set("before", options.before);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages?${params.toString()}`,
+    { credentials },
+    config
+  );
+}
+async function sendMessage(credentials, toUserKey, body, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages`,
+    { method: "POST", credentials, body: { to_user_key: toUserKey, body } },
+    config
+  );
+}
+async function openThread(credentials, withUserKey, config) {
+  const scope = requireAppScope(config);
+  const me = credentials.userId;
+  if (!me) throw new Error("openThread requires an authenticated user.");
+  const pk = dmPairKey(me, withUserKey);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/threads/${encodeURIComponent(pk)}/consent`,
+    { method: "POST", credentials },
+    config
+  );
+}
+async function markMessageRead(credentials, messageId, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages/${encodeURIComponent(messageId)}/read`,
+    { method: "POST", credentials },
+    config
+  );
+}
 async function invokeTool(credentials, agentName, toolName, kwargs = {}, config) {
   return flowstackFetch(
     "/tool/invoke",
@@ -972,6 +1029,6 @@ async function invalidateSitesCache(credentials, config) {
   return client.del(key);
 }
 
-export { CACHE_TTL, addPiiAllowlistTerm, addSiteFile, checkAdminPermissions, createDataSource, createSite, createWorkspace, deleteCached, deleteDataSource, deleteDataset, deleteDocuments, deleteSite, deleteSiteVersion, deleteUser, deleteUserCollection, executeQuery, executeQueryWithConfig, exportUserCollection, flowstackFetch, getCached, getCachedDatasets, getCachedReports, getCachedSites, getCachedVisualizations, getCachedWorkspaces, getConversationHistory, getDataset, getDatasetPreview, getModel, getPiiAllowlist, getPiiSettings, getSite, getSiteVersions, getUser, getUserActivity, getUserCollectionDocuments, getUserCollectionSchema, getUserCollections, getUserDataOverview, getUserStats, getWorkspace, googleLogin, importFromGitHub, insertDocuments, invalidateAllUserCache, invalidateDatasetsCache, invalidateReportsCache, invalidateSitesCache, invalidateVisualizationsCache, invalidateWorkspaceArtifacts, invalidateWorkspacesCache, invokeTool, listAgents, listDataSources, listDatasets, listGitHubRepos, listModels, listReports, listScripts, listSites, listUsers, listVisualizations, listWorkspaces, login, previewPiiMasking, promoteSiteVersion, publishStagedSite, publishToGitHub, queryCollection, reactivateUser, register, removePiiAllowlistTerm, removeSiteAlias, setCached, setCachedDatasets, setCachedReports, setCachedSites, setCachedVisualizations, setCachedWorkspaces, setSiteAlias, suspendUser, testDataSource, updateDocuments, updatePiiSettings, updateUser, uploadDocument, uploadFile };
+export { CACHE_TTL, addPiiAllowlistTerm, addSiteFile, checkAdminPermissions, createDataSource, createSite, createWorkspace, deleteCached, deleteDataSource, deleteDataset, deleteDocuments, deleteSite, deleteSiteVersion, deleteUser, deleteUserCollection, dmPairKey, executeQuery, executeQueryWithConfig, exportUserCollection, flowstackFetch, getCached, getCachedDatasets, getCachedReports, getCachedSites, getCachedVisualizations, getCachedWorkspaces, getConversationHistory, getDataset, getDatasetPreview, getModel, getPiiAllowlist, getPiiSettings, getSite, getSiteVersions, getUser, getUserActivity, getUserCollectionDocuments, getUserCollectionSchema, getUserCollections, getUserDataOverview, getUserStats, getWorkspace, googleLogin, importFromGitHub, insertDocuments, invalidateAllUserCache, invalidateDatasetsCache, invalidateReportsCache, invalidateSitesCache, invalidateVisualizationsCache, invalidateWorkspaceArtifacts, invalidateWorkspacesCache, invokeTool, listAgents, listDataSources, listDatasets, listGitHubRepos, listMessages, listModels, listReports, listScripts, listSites, listThreads, listUsers, listVisualizations, listWorkspaces, login, markMessageRead, openThread, previewPiiMasking, promoteSiteVersion, publishStagedSite, publishToGitHub, queryCollection, reactivateUser, register, removePiiAllowlistTerm, removeSiteAlias, sendMessage, setCached, setCachedDatasets, setCachedReports, setCachedSites, setCachedVisualizations, setCachedWorkspaces, setSiteAlias, suspendUser, testDataSource, updateDocuments, updatePiiSettings, updateUser, uploadDocument, uploadFile };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map

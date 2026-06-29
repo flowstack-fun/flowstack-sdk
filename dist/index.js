@@ -344,6 +344,63 @@ async function deleteDocuments(credentials, collection, filter, config, layer) {
     config
   );
 }
+function dmPairKey(a, b) {
+  return [a, b].sort().join("::");
+}
+function requireAppScope(config) {
+  const scope = config?.appScope;
+  if (!scope) {
+    throw new Error("Private messaging requires an app scope (built-app context).");
+  }
+  return scope;
+}
+async function listThreads(credentials, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/threads`,
+    { credentials },
+    config
+  );
+}
+async function listMessages(credentials, withUserKey, options, config) {
+  const scope = requireAppScope(config);
+  const params = new URLSearchParams();
+  params.set("with", withUserKey);
+  if (options?.limit) params.set("limit", String(options.limit));
+  if (options?.before) params.set("before", options.before);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages?${params.toString()}`,
+    { credentials },
+    config
+  );
+}
+async function sendMessage(credentials, toUserKey, body, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages`,
+    { method: "POST", credentials, body: { to_user_key: toUserKey, body } },
+    config
+  );
+}
+async function openThread(credentials, withUserKey, config) {
+  const scope = requireAppScope(config);
+  const me = credentials.userId;
+  if (!me) throw new Error("openThread requires an authenticated user.");
+  const pk = dmPairKey(me, withUserKey);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/threads/${encodeURIComponent(pk)}/consent`,
+    { method: "POST", credentials },
+    config
+  );
+}
+async function markMessageRead(credentials, messageId, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages/${encodeURIComponent(messageId)}/read`,
+    { method: "POST", credentials },
+    config
+  );
+}
 async function invokeTool(credentials, agentName, toolName, kwargs = {}, config) {
   return flowstackFetch(
     "/tool/invoke",
@@ -6178,6 +6235,124 @@ function useConnections() {
   }, [credentials, config.baseUrl, config.tenantId, refresh]);
   return { connections, isLoading, error, connect, disconnect, refresh };
 }
+function useThreads(options) {
+  const { credentials, config } = useFlowstack();
+  const [threads, setThreads] = react.useState([]);
+  const [isLoading, setIsLoading] = react.useState(false);
+  const [error, setError] = react.useState(null);
+  const enabled = options?.enabled !== false;
+  const clientConfig = {
+    baseUrl: config.baseUrl,
+    tenantId: config.tenantId,
+    appScope: config.appScope
+  };
+  const refresh = react.useCallback(async () => {
+    if (!credentials || !enabled) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await listThreads(credentials, clientConfig);
+      if (res.ok && res.data) {
+        setThreads(res.data.threads);
+      } else {
+        setError(res.error || "Failed to load threads");
+      }
+    } catch (err) {
+      setError(err?.message || "Failed to load threads");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [credentials, config.baseUrl, config.tenantId, config.appScope, enabled]);
+  react.useEffect(() => {
+    refresh();
+  }, [refresh]);
+  const intervalRef = react.useRef(null);
+  react.useEffect(() => {
+    if (!options?.refreshInterval || !enabled) return;
+    intervalRef.current = setInterval(refresh, options.refreshInterval);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [options?.refreshInterval, enabled, refresh]);
+  const openThread2 = react.useCallback(
+    async (withUserKey) => {
+      if (!credentials || !withUserKey) return null;
+      const res = await openThread(credentials, withUserKey, clientConfig);
+      if (res.ok && res.data) {
+        await refresh();
+        return res.data.status;
+      }
+      setError(res.error || "Failed to open thread");
+      return null;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [credentials, config.baseUrl, config.tenantId, config.appScope, refresh]
+  );
+  return { threads, isLoading, error, refresh, openThread: openThread2 };
+}
+function useMessages(withUserKey, options) {
+  const { credentials, config } = useFlowstack();
+  const [messages, setMessages] = react.useState([]);
+  const [isLoading, setIsLoading] = react.useState(false);
+  const [error, setError] = react.useState(null);
+  const enabled = options?.enabled !== false && !!withUserKey;
+  const clientConfig = {
+    baseUrl: config.baseUrl,
+    tenantId: config.tenantId,
+    appScope: config.appScope
+  };
+  const refresh = react.useCallback(async () => {
+    if (!credentials || !withUserKey || !enabled) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await listMessages(
+        credentials,
+        withUserKey,
+        { limit: options?.limit },
+        clientConfig
+      );
+      if (res.ok && res.data) {
+        setMessages(res.data.messages);
+      } else {
+        setError(res.error || "Failed to load messages");
+      }
+    } catch (err) {
+      setError(err?.message || "Failed to load messages");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [credentials, withUserKey, config.baseUrl, config.tenantId, config.appScope, enabled, options?.limit]);
+  react.useEffect(() => {
+    refresh();
+  }, [refresh]);
+  const intervalRef = react.useRef(null);
+  react.useEffect(() => {
+    if (!options?.refreshInterval || !enabled) return;
+    intervalRef.current = setInterval(refresh, options.refreshInterval);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [options?.refreshInterval, enabled, refresh]);
+  const send = react.useCallback(
+    async (body) => {
+      if (!credentials) throw new Error("Not authenticated");
+      if (!withUserKey) throw new Error("No counterpart selected");
+      if (!body || !body.trim()) return;
+      setError(null);
+      const res = await sendMessage(credentials, withUserKey, body, clientConfig);
+      if (!res.ok) {
+        const msg = res.error || "Failed to send message";
+        setError(msg);
+        throw new Error(msg);
+      }
+      await refresh();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [credentials, withUserKey, config.baseUrl, config.tenantId, config.appScope, refresh]
+  );
+  return { messages, isLoading, error, send, refresh };
+}
 function normalizeVersion(raw) {
   return {
     version: raw.version || 0,
@@ -10663,6 +10838,7 @@ exports.deleteSite = deleteSite;
 exports.deleteSiteVersion = deleteSiteVersion;
 exports.deleteUser = deleteUser;
 exports.deleteUserCollection = deleteUserCollection;
+exports.dmPairKey = dmPairKey;
 exports.executeQuery = executeQuery;
 exports.executeQueryWithConfig = executeQueryWithConfig;
 exports.exportUserCollection = exportUserCollection;
@@ -10714,10 +10890,12 @@ exports.listDataSources = listDataSources;
 exports.listDatasets = listDatasets;
 exports.listGitHubRepos = listGitHubRepos;
 exports.listLibraryItems = listLibraryItems;
+exports.listMessages = listMessages;
 exports.listModels = listModels;
 exports.listReports = listReports;
 exports.listScripts = listScripts;
 exports.listSites = listSites;
+exports.listThreads = listThreads;
 exports.listUsers = listUsers;
 exports.listVisualizations = listVisualizations;
 exports.listWorkspaces = listWorkspaces;
@@ -10725,6 +10903,7 @@ exports.loadCredentials = loadCredentials;
 exports.loadMessages = loadMessages;
 exports.loadSelectedWorkspace = loadSelectedWorkspace;
 exports.login = login;
+exports.markMessageRead = markMessageRead;
 exports.marketingTemplate = marketingTemplate;
 exports.mockChatHistory = mockChatHistory;
 exports.mockCredentials = mockCredentials;
@@ -10737,6 +10916,7 @@ exports.mockUserActivity = mockUserActivity;
 exports.mockUserStats = mockUserStats;
 exports.mockVisualizations = mockVisualizations;
 exports.mockWorkspaces = mockWorkspaces;
+exports.openThread = openThread;
 exports.parseSSELine = parseSSELine;
 exports.parseSSEStream = parseSSEStream;
 exports.previewPiiMasking = previewPiiMasking;
@@ -10753,6 +10933,7 @@ exports.sanitizeMermaidCode = sanitizeMermaidCode;
 exports.saveCredentials = saveCredentials;
 exports.saveMessages = saveMessages;
 exports.saveSelectedWorkspace = saveSelectedWorkspace;
+exports.sendMessage = sendMessage;
 exports.setCached = setCached;
 exports.setCachedDatasets = setCachedDatasets;
 exports.setCachedReports = setCachedReports;
@@ -10793,6 +10974,7 @@ exports.useLibrary = useLibrary;
 exports.useLibraryConversations = useLibraryConversations;
 exports.useLibrarySearch = useLibrarySearch;
 exports.useLibraryTrash = useLibraryTrash;
+exports.useMessages = useMessages;
 exports.useModelPreference = useModelPreference;
 exports.useModels = useModels;
 exports.useOllamaDetection = useOllamaDetection;
@@ -10805,6 +10987,7 @@ exports.useSiteVersions = useSiteVersions;
 exports.useSites = useSites;
 exports.useSubagentInvoke = useSubagentInvoke;
 exports.useSubagents = useSubagents;
+exports.useThreads = useThreads;
 exports.useToolInvocation = useToolInvocation;
 exports.useUserCollections = useUserCollections;
 exports.useUserManagement = useUserManagement;

@@ -22,6 +22,8 @@ export { useAgents } from './useAgents';
 export { useCollection, COLLECTION_CHANGED_EVENT } from './useCollection';
 export { useToolInvocation } from './useToolInvocation';
 export { useConnections } from './useConnections';
+export { useThreads } from './useThreads';
+export { useMessages } from './useMessages';
 export { useSiteVersions } from './useSiteVersions';
 export { useProviderCredentials } from './useProviderCredentials';
 export { useOllamaDetection } from './useOllamaDetection';
@@ -39,6 +41,8 @@ export type { UseToolInvocationOptions, UseToolInvocationReturn } from './useToo
 export type { ConnectionStatus, UseFlowstackStatusReturn, UseFlowstackStatusOptions } from './useFlowstackStatus';
 export type { UseCollectionOptions, UseCollectionReturn } from './useCollection';
 export type { ConnectionsState, GoogleService, ServiceProvider, UseConnectionsReturn, GoogleConnectionStatus, ServiceConnectionStatus, GitHubConnectionStatus } from './useConnections';
+export type { UseThreadsOptions, UseThreadsReturn } from './useThreads';
+export type { UseMessagesOptions, UseMessagesReturn } from './useMessages';
 export type { CreateCredentialParams, UseProviderCredentialsReturn } from './useProviderCredentials';
 export type { UseDataOverviewReturn } from './useDataOverview';
 export type { UseUserCollectionsOptions, UseUserCollectionsReturn } from './useUserCollections';

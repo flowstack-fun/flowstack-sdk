@@ -332,6 +332,63 @@ async function deleteDocuments(credentials, collection, filter, config, layer) {
     config
   );
 }
+function dmPairKey(a, b) {
+  return [a, b].sort().join("::");
+}
+function requireAppScope(config) {
+  const scope = config?.appScope;
+  if (!scope) {
+    throw new Error("Private messaging requires an app scope (built-app context).");
+  }
+  return scope;
+}
+async function listThreads(credentials, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/threads`,
+    { credentials },
+    config
+  );
+}
+async function listMessages(credentials, withUserKey, options, config) {
+  const scope = requireAppScope(config);
+  const params = new URLSearchParams();
+  params.set("with", withUserKey);
+  if (options?.limit) params.set("limit", String(options.limit));
+  if (options?.before) params.set("before", options.before);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages?${params.toString()}`,
+    { credentials },
+    config
+  );
+}
+async function sendMessage(credentials, toUserKey, body, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages`,
+    { method: "POST", credentials, body: { to_user_key: toUserKey, body } },
+    config
+  );
+}
+async function openThread(credentials, withUserKey, config) {
+  const scope = requireAppScope(config);
+  const me = credentials.userId;
+  if (!me) throw new Error("openThread requires an authenticated user.");
+  const pk = dmPairKey(me, withUserKey);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/threads/${encodeURIComponent(pk)}/consent`,
+    { method: "POST", credentials },
+    config
+  );
+}
+async function markMessageRead(credentials, messageId, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages/${encodeURIComponent(messageId)}/read`,
+    { method: "POST", credentials },
+    config
+  );
+}
 async function invokeTool(credentials, agentName, toolName, kwargs = {}, config) {
   return flowstackFetch(
     "/tool/invoke",
@@ -989,6 +1046,7 @@ exports.deleteSite = deleteSite;
 exports.deleteSiteVersion = deleteSiteVersion;
 exports.deleteUser = deleteUser;
 exports.deleteUserCollection = deleteUserCollection;
+exports.dmPairKey = dmPairKey;
 exports.executeQuery = executeQuery;
 exports.executeQueryWithConfig = executeQueryWithConfig;
 exports.exportUserCollection = exportUserCollection;
@@ -1030,14 +1088,18 @@ exports.listAgents = listAgents;
 exports.listDataSources = listDataSources;
 exports.listDatasets = listDatasets;
 exports.listGitHubRepos = listGitHubRepos;
+exports.listMessages = listMessages;
 exports.listModels = listModels;
 exports.listReports = listReports;
 exports.listScripts = listScripts;
 exports.listSites = listSites;
+exports.listThreads = listThreads;
 exports.listUsers = listUsers;
 exports.listVisualizations = listVisualizations;
 exports.listWorkspaces = listWorkspaces;
 exports.login = login;
+exports.markMessageRead = markMessageRead;
+exports.openThread = openThread;
 exports.previewPiiMasking = previewPiiMasking;
 exports.promoteSiteVersion = promoteSiteVersion;
 exports.publishStagedSite = publishStagedSite;
@@ -1047,6 +1109,7 @@ exports.reactivateUser = reactivateUser;
 exports.register = register;
 exports.removePiiAllowlistTerm = removePiiAllowlistTerm;
 exports.removeSiteAlias = removeSiteAlias;
+exports.sendMessage = sendMessage;
 exports.setCached = setCached;
 exports.setCachedDatasets = setCachedDatasets;
 exports.setCachedReports = setCachedReports;

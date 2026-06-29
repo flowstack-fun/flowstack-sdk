@@ -337,6 +337,63 @@ async function deleteDocuments(credentials, collection, filter, config, layer) {
     config
   );
 }
+function dmPairKey(a, b) {
+  return [a, b].sort().join("::");
+}
+function requireAppScope(config) {
+  const scope = config?.appScope;
+  if (!scope) {
+    throw new Error("Private messaging requires an app scope (built-app context).");
+  }
+  return scope;
+}
+async function listThreads(credentials, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/threads`,
+    { credentials },
+    config
+  );
+}
+async function listMessages(credentials, withUserKey, options, config) {
+  const scope = requireAppScope(config);
+  const params = new URLSearchParams();
+  params.set("with", withUserKey);
+  if (options?.limit) params.set("limit", String(options.limit));
+  if (options?.before) params.set("before", options.before);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages?${params.toString()}`,
+    { credentials },
+    config
+  );
+}
+async function sendMessage(credentials, toUserKey, body, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages`,
+    { method: "POST", credentials, body: { to_user_key: toUserKey, body } },
+    config
+  );
+}
+async function openThread(credentials, withUserKey, config) {
+  const scope = requireAppScope(config);
+  const me = credentials.userId;
+  if (!me) throw new Error("openThread requires an authenticated user.");
+  const pk = dmPairKey(me, withUserKey);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/threads/${encodeURIComponent(pk)}/consent`,
+    { method: "POST", credentials },
+    config
+  );
+}
+async function markMessageRead(credentials, messageId, config) {
+  const scope = requireAppScope(config);
+  return flowstackFetch(
+    `/apps/${encodeURIComponent(scope)}/messages/${encodeURIComponent(messageId)}/read`,
+    { method: "POST", credentials },
+    config
+  );
+}
 async function invokeTool(credentials, agentName, toolName, kwargs = {}, config) {
   return flowstackFetch(
     "/tool/invoke",
@@ -6171,6 +6228,124 @@ function useConnections() {
   }, [credentials, config.baseUrl, config.tenantId, refresh]);
   return { connections, isLoading, error, connect, disconnect, refresh };
 }
+function useThreads(options) {
+  const { credentials, config } = useFlowstack();
+  const [threads, setThreads] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const enabled = options?.enabled !== false;
+  const clientConfig = {
+    baseUrl: config.baseUrl,
+    tenantId: config.tenantId,
+    appScope: config.appScope
+  };
+  const refresh = useCallback(async () => {
+    if (!credentials || !enabled) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await listThreads(credentials, clientConfig);
+      if (res.ok && res.data) {
+        setThreads(res.data.threads);
+      } else {
+        setError(res.error || "Failed to load threads");
+      }
+    } catch (err) {
+      setError(err?.message || "Failed to load threads");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [credentials, config.baseUrl, config.tenantId, config.appScope, enabled]);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+  const intervalRef = useRef(null);
+  useEffect(() => {
+    if (!options?.refreshInterval || !enabled) return;
+    intervalRef.current = setInterval(refresh, options.refreshInterval);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [options?.refreshInterval, enabled, refresh]);
+  const openThread2 = useCallback(
+    async (withUserKey) => {
+      if (!credentials || !withUserKey) return null;
+      const res = await openThread(credentials, withUserKey, clientConfig);
+      if (res.ok && res.data) {
+        await refresh();
+        return res.data.status;
+      }
+      setError(res.error || "Failed to open thread");
+      return null;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [credentials, config.baseUrl, config.tenantId, config.appScope, refresh]
+  );
+  return { threads, isLoading, error, refresh, openThread: openThread2 };
+}
+function useMessages(withUserKey, options) {
+  const { credentials, config } = useFlowstack();
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const enabled = options?.enabled !== false && !!withUserKey;
+  const clientConfig = {
+    baseUrl: config.baseUrl,
+    tenantId: config.tenantId,
+    appScope: config.appScope
+  };
+  const refresh = useCallback(async () => {
+    if (!credentials || !withUserKey || !enabled) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await listMessages(
+        credentials,
+        withUserKey,
+        { limit: options?.limit },
+        clientConfig
+      );
+      if (res.ok && res.data) {
+        setMessages(res.data.messages);
+      } else {
+        setError(res.error || "Failed to load messages");
+      }
+    } catch (err) {
+      setError(err?.message || "Failed to load messages");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [credentials, withUserKey, config.baseUrl, config.tenantId, config.appScope, enabled, options?.limit]);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+  const intervalRef = useRef(null);
+  useEffect(() => {
+    if (!options?.refreshInterval || !enabled) return;
+    intervalRef.current = setInterval(refresh, options.refreshInterval);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [options?.refreshInterval, enabled, refresh]);
+  const send = useCallback(
+    async (body) => {
+      if (!credentials) throw new Error("Not authenticated");
+      if (!withUserKey) throw new Error("No counterpart selected");
+      if (!body || !body.trim()) return;
+      setError(null);
+      const res = await sendMessage(credentials, withUserKey, body, clientConfig);
+      if (!res.ok) {
+        const msg = res.error || "Failed to send message";
+        setError(msg);
+        throw new Error(msg);
+      }
+      await refresh();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [credentials, withUserKey, config.baseUrl, config.tenantId, config.appScope, refresh]
+  );
+  return { messages, isLoading, error, send, refresh };
+}
 function normalizeVersion(raw) {
   return {
     version: raw.version || 0,
@@ -10605,6 +10780,6 @@ async function listLibraryItems(credentials, type, _options, config) {
   }
 }
 
-export { AdminGate, AgentFactory, AgentRegistry, AuthGuard, AuthPage, BrokeredLoginButton, CACHE_TTL, COLLECTION_CHANGED_EVENT, COLLECTION_LAYERS, CREDENTIAL_PURPOSES, ChatInterface, ChatPage, CreateWorkspaceModal, DEFAULT_PATTERNS, DEFAULT_PROVIDER_MODEL_SETTINGS, DashboardLayout, DatasetUploader, ErrorCodes, ErrorMessages, FlowstackError, FlowstackProvider, GoogleSignIn, IntentAnalyzer, LLM_PROVIDERS, LoginForm, MarkdownRenderer, MessageList, RecoveryActions, RegisterForm, WorkspaceSelector, addPiiAllowlistTerm, addSiteFile, analyzeWithRules, checkAdminPermissions, clearAllFlowstackData, clearCredentials, clearMessages, clearSelectedWorkspace, createCustomTemplate, createDataSource, createSite, createWorkspace, dataScienceTemplate, deleteCached, deleteDataSource, deleteDataset, deleteDocuments, deleteSite, deleteSiteVersion, deleteUser, deleteUserCollection, executeQuery, executeQueryWithConfig, exportUserCollection, extractEntities, flowstackFetch, generateMockId, getAgentTemplate, getCached, getCachedDatasets, getCachedReports, getCachedSites, getCachedVisualizations, getCachedWorkspaces, getConfigSummary, getConversationHistory, getDataset, getDatasetPreview, getItem, getModel, getPiiAllowlist, getPiiSettings, getSite, getSiteVersions, getSubagent, getUser, getUserActivity, getUserCollectionDocuments, getUserCollectionSchema, getUserCollections, getUserDataOverview, getUserStats, getWorkspace, googleLogin, importFromGitHub, insertDocuments, invalidateAllUserCache, invalidateDatasetsCache, invalidateReportsCache, invalidateSitesCache, invalidateVisualizationsCache, invalidateWorkspaceArtifacts, invalidateWorkspacesCache, invokeTool, isDevelopmentConfig, isFlowstackError, isProviderCredential, listAgents, listDataSources, listDatasets, listGitHubRepos, listLibraryItems, listModels, listReports, listScripts, listSites, listUsers, listVisualizations, listWorkspaces, loadCredentials, loadMessages, loadSelectedWorkspace, login, marketingTemplate, mockChatHistory, mockCredentials, mockDataSources, mockDatasets, mockDelay, mockManagedUsers, mockUser, mockUserActivity, mockUserStats, mockVisualizations, mockWorkspaces, parseSSELine, parseSSEStream, previewPiiMasking, processSSEStream, promoteSiteVersion, publishStagedSite, publishToGitHub, reactivateUser, register, removeItem, removePiiAllowlistTerm, removeSiteAlias, sanitizeMermaidCode, saveCredentials, saveMessages, saveSelectedWorkspace, setCached, setCachedDatasets, setCachedReports, setCachedSites, setCachedVisualizations, setCachedWorkspaces, setItem, setSiteAlias, splitContentSegments, supportTemplate, suspendUser, testDataSource, updateDocuments, updatePiiSettings, updateUser, uploadFile, useAdminProviderCredentials, useAgent, useAgents, useAuth, useAuthGuard, useAutomations, useCollection, useCollectionExplorer, useConnections, useConversation, useConversations, useCurrentSession, useDataOverview, useDataSources, useDatasets, useFlowstack, useFlowstackOptional, useFlowstackStatus, useIntegrations, useIntentAgent, useLibrary, useLibraryConversations, useLibrarySearch, useLibraryTrash, useModelPreference, useModels, useOllamaDetection, useProviderCredentials, usePublicCollection, useQuery, useRecentLibraryConversations, useReports, useSiteVersions, useSites, useSubagentInvoke, useSubagents, useToolInvocation, useUserCollections, useUserManagement, useVisualizations, useWorkspace, validateConfig, validateConfigOrThrow, withErrorHandling };
+export { AdminGate, AgentFactory, AgentRegistry, AuthGuard, AuthPage, BrokeredLoginButton, CACHE_TTL, COLLECTION_CHANGED_EVENT, COLLECTION_LAYERS, CREDENTIAL_PURPOSES, ChatInterface, ChatPage, CreateWorkspaceModal, DEFAULT_PATTERNS, DEFAULT_PROVIDER_MODEL_SETTINGS, DashboardLayout, DatasetUploader, ErrorCodes, ErrorMessages, FlowstackError, FlowstackProvider, GoogleSignIn, IntentAnalyzer, LLM_PROVIDERS, LoginForm, MarkdownRenderer, MessageList, RecoveryActions, RegisterForm, WorkspaceSelector, addPiiAllowlistTerm, addSiteFile, analyzeWithRules, checkAdminPermissions, clearAllFlowstackData, clearCredentials, clearMessages, clearSelectedWorkspace, createCustomTemplate, createDataSource, createSite, createWorkspace, dataScienceTemplate, deleteCached, deleteDataSource, deleteDataset, deleteDocuments, deleteSite, deleteSiteVersion, deleteUser, deleteUserCollection, dmPairKey, executeQuery, executeQueryWithConfig, exportUserCollection, extractEntities, flowstackFetch, generateMockId, getAgentTemplate, getCached, getCachedDatasets, getCachedReports, getCachedSites, getCachedVisualizations, getCachedWorkspaces, getConfigSummary, getConversationHistory, getDataset, getDatasetPreview, getItem, getModel, getPiiAllowlist, getPiiSettings, getSite, getSiteVersions, getSubagent, getUser, getUserActivity, getUserCollectionDocuments, getUserCollectionSchema, getUserCollections, getUserDataOverview, getUserStats, getWorkspace, googleLogin, importFromGitHub, insertDocuments, invalidateAllUserCache, invalidateDatasetsCache, invalidateReportsCache, invalidateSitesCache, invalidateVisualizationsCache, invalidateWorkspaceArtifacts, invalidateWorkspacesCache, invokeTool, isDevelopmentConfig, isFlowstackError, isProviderCredential, listAgents, listDataSources, listDatasets, listGitHubRepos, listLibraryItems, listMessages, listModels, listReports, listScripts, listSites, listThreads, listUsers, listVisualizations, listWorkspaces, loadCredentials, loadMessages, loadSelectedWorkspace, login, markMessageRead, marketingTemplate, mockChatHistory, mockCredentials, mockDataSources, mockDatasets, mockDelay, mockManagedUsers, mockUser, mockUserActivity, mockUserStats, mockVisualizations, mockWorkspaces, openThread, parseSSELine, parseSSEStream, previewPiiMasking, processSSEStream, promoteSiteVersion, publishStagedSite, publishToGitHub, reactivateUser, register, removeItem, removePiiAllowlistTerm, removeSiteAlias, sanitizeMermaidCode, saveCredentials, saveMessages, saveSelectedWorkspace, sendMessage, setCached, setCachedDatasets, setCachedReports, setCachedSites, setCachedVisualizations, setCachedWorkspaces, setItem, setSiteAlias, splitContentSegments, supportTemplate, suspendUser, testDataSource, updateDocuments, updatePiiSettings, updateUser, uploadFile, useAdminProviderCredentials, useAgent, useAgents, useAuth, useAuthGuard, useAutomations, useCollection, useCollectionExplorer, useConnections, useConversation, useConversations, useCurrentSession, useDataOverview, useDataSources, useDatasets, useFlowstack, useFlowstackOptional, useFlowstackStatus, useIntegrations, useIntentAgent, useLibrary, useLibraryConversations, useLibrarySearch, useLibraryTrash, useMessages, useModelPreference, useModels, useOllamaDetection, useProviderCredentials, usePublicCollection, useQuery, useRecentLibraryConversations, useReports, useSiteVersions, useSites, useSubagentInvoke, useSubagents, useThreads, useToolInvocation, useUserCollections, useUserManagement, useVisualizations, useWorkspace, validateConfig, validateConfigOrThrow, withErrorHandling };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map

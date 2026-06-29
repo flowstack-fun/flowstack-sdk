@@ -83,6 +83,8 @@ export {
   useCollection,
   useToolInvocation,
   useConnections,
+  useThreads,
+  useMessages,
   useSiteVersions,
   useProviderCredentials,
   useOllamaDetection,
@@ -118,6 +120,10 @@ export type {
   UseCollectionExplorerReturn,
   UsePublicCollectionOptions,
   UsePublicCollectionReturn,
+  UseThreadsOptions,
+  UseThreadsReturn,
+  UseMessagesOptions,
+  UseMessagesReturn,
 } from './hooks';
 
 // =============================================================================
@@ -393,6 +399,13 @@ export {
   insertDocuments,
   updateDocuments,
   deleteDocuments,
+  // Private messaging (P0-138)
+  listThreads,
+  listMessages,
+  sendMessage,
+  openThread,
+  markMessageRead,
+  dmPairKey,
   // Direct tool invocation
   invokeTool,
   // GitHub Import
@@ -417,6 +430,8 @@ export {
 export type {
   FlowstackClientConfig,
   RequestOptions,
+  DmMessage,
+  DmThread,
 } from './api/client';
 
 // =============================================================================

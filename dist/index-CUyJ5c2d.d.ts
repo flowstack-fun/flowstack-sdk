@@ -1236,6 +1236,59 @@ declare function deleteDocuments(credentials: FlowstackCredentials, collection: 
     deleted_count: number;
     collection: string;
 }>>;
+interface DmMessage {
+    message_id: string;
+    from: string;
+    to: string;
+    /** UNTRUSTED user input — render as text, never raw HTML. */
+    body: string;
+    created_at: string;
+    read_at: string | null;
+}
+interface DmThread {
+    pair_key: string;
+    with_user_key: string;
+    status: 'pending' | 'open';
+    last_message: DmMessage | null;
+    unread_count: number;
+    updated_at: string | null;
+}
+/**
+ * Deterministic, order-independent thread key for a pair of user keys.
+ * Mirrors the backend's `pair_key` (sorted, '::'-joined).
+ */
+declare function dmPairKey(a: string, b: string): string;
+/** List the caller's threads (counterpart key, last message, unread count). */
+declare function listThreads(credentials: FlowstackCredentials, config?: FlowstackClientConfig): Promise<ApiResponse<{
+    threads: DmThread[];
+    count: number;
+}>>;
+/** List messages in the caller's thread with `withUserKey`. ACL'd server-side. */
+declare function listMessages(credentials: FlowstackCredentials, withUserKey: string, options?: {
+    limit?: number;
+    before?: string;
+}, config?: FlowstackClientConfig): Promise<ApiResponse<{
+    messages: DmMessage[];
+    count: number;
+}>>;
+/** Send a message to `toUserKey`. 403 unless the thread is mutually open. */
+declare function sendMessage(credentials: FlowstackCredentials, toUserKey: string, body: string, config?: FlowstackClientConfig): Promise<ApiResponse<{
+    message_id: string;
+    created_at: string;
+}>>;
+/**
+ * Record the caller's consent to open a thread with `withUserKey`.
+ * The thread becomes `open` (sendable) only once BOTH parties have consented.
+ */
+declare function openThread(credentials: FlowstackCredentials, withUserKey: string, config?: FlowstackClientConfig): Promise<ApiResponse<{
+    pair_key: string;
+    status: string;
+}>>;
+/** Mark a received message as read (recipient only). */
+declare function markMessageRead(credentials: FlowstackCredentials, messageId: string, config?: FlowstackClientConfig): Promise<ApiResponse<{
+    message_id: string;
+    read: boolean;
+}>>;
 /**
  * Invoke an agent tool directly (bypasses LLM orchestration).
  */
@@ -1543,4 +1596,4 @@ declare function getCachedSites(credentials: FlowstackCredentials, config: Redis
 declare function setCachedSites(credentials: FlowstackCredentials, sites: PublishedSiteInfo[], config: RedisConfig): Promise<boolean>;
 declare function invalidateSitesCache(credentials: FlowstackCredentials, config: RedisConfig): Promise<boolean>;
 
-export { type RedisConfig$1 as $, type AgentTemplate as A, type DataSourceBadgeInfo as B, type ChatMessage as C, type DatasetInfo as D, type AgentConfig as E, type FlowstackConfig as F, type ModelPreferenceState as G, type ModelOption as H, type AdminProviderCredential as I, type ExistingProviderCredential as J, type CreateAdminProviderCredentialInput as K, type LLMProvider as L, type ManagedUser as M, type FlowstackClientConfig as N, type OllamaLocalModel as O, type ProviderCredential as P, LLM_PROVIDERS as Q, CREDENTIAL_PURPOSES as R, type StreamEvent as S, type ToolCall as T, type UseAuthReturn as U, type VisualizationData as V, type WorkspaceInfo as W, DEFAULT_PROVIDER_MODEL_SETTINGS as X, isProviderCredential as Y, COLLECTION_LAYERS as Z, type AuthConfig as _, type FlowstackContextValue as a, deleteDataSource as a$, type DatabaseConfig as a0, type LoginRequest as a1, type LoginResponse as a2, type RegisterRequest as a3, type RegisterResponse as a4, type GoogleAuthResponse as a5, type SessionState as a6, type CreateWorkspaceRequest as a7, type DatasetPreview as a8, type ColumnSchema as a9, type PiiSettings as aA, type PiiEntitySettings as aB, type PiiRedactedEntity as aC, type ApiResponse as aD, type ListResponse as aE, type UserRole as aF, type UserStatus as aG, type UserActivityType as aH, type UpdateUserRequest as aI, type UserListParams as aJ, type UserListResponse as aK, flowstackFetch as aL, listWorkspaces as aM, createWorkspace as aN, getWorkspace as aO, listDatasets as aP, getDataset as aQ, getDatasetPreview as aR, deleteDataset as aS, listVisualizations as aT, listReports as aU, listModels as aV, listScripts as aW, getModel as aX, listDataSources as aY, createDataSource as aZ, testDataSource as a_, type DatasetRow as aa, type DatasetStreamOptions as ab, type ReportInfo as ac, type ModelInfo as ad, type ScriptInfo as ae, type DataSourceType as af, type DataSourceConfig as ag, type ConnectionTestResult as ah, type SearchResult as ai, type SearchResultsData as aj, type StreamEventType as ak, type InterruptInfo as al, type QueryOptions as am, type UsageStats as an, type UsagePeriod as ao, type CreditStatus as ap, type AgentInfo as aq, type PublishedSiteInfo as ar, type CreateSiteParams$1 as as, type SiteVersion as at, type SiteVersionManifest as au, type PublishToGitHubParams as av, type PublishToGitHubResult as aw, type CredentialPurpose as ax, type UserDataOverviewWorkspace as ay, type GitHubRepo as az, type UseWorkspaceReturn as b, getCachedSites as b$, executeQuery as b0, executeQueryWithConfig as b1, uploadFile as b2, login as b3, register as b4, googleLogin as b5, listUsers as b6, getUser as b7, updateUser as b8, deleteUser as b9, updatePiiSettings as bA, previewPiiMasking as bB, getPiiAllowlist as bC, addPiiAllowlistTerm as bD, removePiiAllowlistTerm as bE, getUserDataOverview as bF, getUserCollections as bG, getUserCollectionDocuments as bH, getUserCollectionSchema as bI, deleteUserCollection as bJ, exportUserCollection as bK, type RequestOptions as bL, CACHE_TTL as bM, getCachedWorkspaces as bN, setCachedWorkspaces as bO, invalidateWorkspacesCache as bP, getCachedDatasets as bQ, setCachedDatasets as bR, invalidateDatasetsCache as bS, getCachedVisualizations as bT, setCachedVisualizations as bU, invalidateVisualizationsCache as bV, getCachedReports as bW, setCachedReports as bX, invalidateReportsCache as bY, invalidateWorkspaceArtifacts as bZ, invalidateAllUserCache as b_, suspendUser as ba, reactivateUser as bb, getUserActivity as bc, getUserStats as bd, checkAdminPermissions as be, getConversationHistory as bf, listAgents as bg, listSites as bh, getSite as bi, createSite as bj, addSiteFile as bk, publishStagedSite as bl, deleteSite as bm, getSiteVersions as bn, promoteSiteVersion as bo, deleteSiteVersion as bp, setSiteAlias as bq, removeSiteAlias as br, publishToGitHub as bs, insertDocuments as bt, updateDocuments as bu, deleteDocuments as bv, invokeTool as bw, listGitHubRepos as bx, importFromGitHub as by, getPiiSettings as bz, type UseDatasetsReturn as c, setCachedSites as c0, invalidateSitesCache as c1, getCached as c2, setCached as c3, deleteCached as c4, queryCollection as c5, uploadDocument as c6, type CreateSiteParams as c7, type RedisConfig as c8, type UseVisualizationsReturn as d, type UseReportsReturn as e, type UseModelsReturn as f, type UseDataSourcesReturn as g, type UseAgentOptions as h, type UseAgentReturn as i, type UseQueryReturn as j, type UseUserManagementReturn as k, type UseSitesReturn as l, type UseAgentsReturn as m, type CollectionLayer as n, type UseSiteVersionsReturn as o, type PurposeInfo as p, type ProviderModelSettings as q, type OllamaStatus as r, type UserDataOverview as s, type UserCollectionInfo as t, type CollectionSchemaInfo as u, type FlowstackCredentials as v, type User as w, type DataSource as x, type UserStats as y, type UserActivityLog as z };
+export { COLLECTION_LAYERS as $, type AgentTemplate as A, type UserStats as B, type ChatMessage as C, type DmThread as D, type UserActivityLog as E, type FlowstackConfig as F, type DataSourceBadgeInfo as G, type AgentConfig as H, type ModelPreferenceState as I, type ModelOption as J, type AdminProviderCredential as K, type LLMProvider as L, type ManagedUser as M, type ExistingProviderCredential as N, type OllamaLocalModel as O, type ProviderCredential as P, type CreateAdminProviderCredentialInput as Q, type FlowstackClientConfig as R, type StreamEvent as S, type ToolCall as T, type UseAuthReturn as U, type VisualizationData as V, type WorkspaceInfo as W, LLM_PROVIDERS as X, CREDENTIAL_PURPOSES as Y, DEFAULT_PROVIDER_MODEL_SETTINGS as Z, isProviderCredential as _, type FlowstackContextValue as a, createDataSource as a$, type AuthConfig as a0, type RedisConfig$1 as a1, type DatabaseConfig as a2, type LoginRequest as a3, type LoginResponse as a4, type RegisterRequest as a5, type RegisterResponse as a6, type GoogleAuthResponse as a7, type SessionState as a8, type CreateWorkspaceRequest as a9, type UserDataOverviewWorkspace as aA, type GitHubRepo as aB, type PiiSettings as aC, type PiiEntitySettings as aD, type PiiRedactedEntity as aE, type ApiResponse as aF, type ListResponse as aG, type UserRole as aH, type UserStatus as aI, type UserActivityType as aJ, type UpdateUserRequest as aK, type UserListParams as aL, type UserListResponse as aM, flowstackFetch as aN, listWorkspaces as aO, createWorkspace as aP, getWorkspace as aQ, listDatasets as aR, getDataset as aS, getDatasetPreview as aT, deleteDataset as aU, listVisualizations as aV, listReports as aW, listModels as aX, listScripts as aY, getModel as aZ, listDataSources as a_, type DatasetPreview as aa, type ColumnSchema as ab, type DatasetRow as ac, type DatasetStreamOptions as ad, type ReportInfo as ae, type ModelInfo as af, type ScriptInfo as ag, type DataSourceType as ah, type DataSourceConfig as ai, type ConnectionTestResult as aj, type SearchResult as ak, type SearchResultsData as al, type StreamEventType as am, type InterruptInfo as an, type QueryOptions as ao, type UsageStats as ap, type UsagePeriod as aq, type CreditStatus as ar, type AgentInfo as as, type PublishedSiteInfo as at, type CreateSiteParams$1 as au, type SiteVersion as av, type SiteVersionManifest as aw, type PublishToGitHubParams as ax, type PublishToGitHubResult as ay, type CredentialPurpose as az, type UseWorkspaceReturn as b, getCachedVisualizations as b$, testDataSource as b0, deleteDataSource as b1, executeQuery as b2, executeQueryWithConfig as b3, uploadFile as b4, login as b5, register as b6, googleLogin as b7, listUsers as b8, getUser as b9, sendMessage as bA, openThread as bB, markMessageRead as bC, dmPairKey as bD, invokeTool as bE, listGitHubRepos as bF, importFromGitHub as bG, getPiiSettings as bH, updatePiiSettings as bI, previewPiiMasking as bJ, getPiiAllowlist as bK, addPiiAllowlistTerm as bL, removePiiAllowlistTerm as bM, getUserDataOverview as bN, getUserCollections as bO, getUserCollectionDocuments as bP, getUserCollectionSchema as bQ, deleteUserCollection as bR, exportUserCollection as bS, type RequestOptions as bT, CACHE_TTL as bU, getCachedWorkspaces as bV, setCachedWorkspaces as bW, invalidateWorkspacesCache as bX, getCachedDatasets as bY, setCachedDatasets as bZ, invalidateDatasetsCache as b_, updateUser as ba, deleteUser as bb, suspendUser as bc, reactivateUser as bd, getUserActivity as be, getUserStats as bf, checkAdminPermissions as bg, getConversationHistory as bh, listAgents as bi, listSites as bj, getSite as bk, createSite as bl, addSiteFile as bm, publishStagedSite as bn, deleteSite as bo, getSiteVersions as bp, promoteSiteVersion as bq, deleteSiteVersion as br, setSiteAlias as bs, removeSiteAlias as bt, publishToGitHub as bu, insertDocuments as bv, updateDocuments as bw, deleteDocuments as bx, listThreads as by, listMessages as bz, type UseDatasetsReturn as c, setCachedVisualizations as c0, invalidateVisualizationsCache as c1, getCachedReports as c2, setCachedReports as c3, invalidateReportsCache as c4, invalidateWorkspaceArtifacts as c5, invalidateAllUserCache as c6, getCachedSites as c7, setCachedSites as c8, invalidateSitesCache as c9, getCached as ca, setCached as cb, deleteCached as cc, queryCollection as cd, uploadDocument as ce, type CreateSiteParams as cf, type RedisConfig as cg, type UseVisualizationsReturn as d, type UseReportsReturn as e, type UseModelsReturn as f, type UseDataSourcesReturn as g, type UseAgentOptions as h, type UseAgentReturn as i, type UseQueryReturn as j, type UseUserManagementReturn as k, type UseSitesReturn as l, type UseAgentsReturn as m, type CollectionLayer as n, type DmMessage as o, type UseSiteVersionsReturn as p, type PurposeInfo as q, type ProviderModelSettings as r, type OllamaStatus as s, type UserDataOverview as t, type UserCollectionInfo as u, type CollectionSchemaInfo as v, type FlowstackCredentials as w, type User as x, type DatasetInfo as y, type DataSource as z };

@@ -758,6 +758,135 @@ export async function deleteDocuments(
 }
 
 // =============================================================================
+// Private Messaging (P0-138)
+// =============================================================================
+//
+// Server-mediated, ACL'd, key-addressed direct messages between two app users.
+// The backend pins `from` to the caller's JWT identity, gates sends on a
+// mutually-consented thread, and ACLs reads to thread participants — neither
+// party ever learns the other's contact.
+//
+// Message bodies are UNTRUSTED user input. Render them as plain text / sanitized
+// markdown only — never as raw HTML (no dangerouslySetInnerHTML). If a body is
+// ever passed to an agent, treat it as data, not instructions.
+
+export interface DmMessage {
+  message_id: string;
+  from: string;
+  to: string;
+  /** UNTRUSTED user input — render as text, never raw HTML. */
+  body: string;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface DmThread {
+  pair_key: string;
+  with_user_key: string;
+  status: 'pending' | 'open';
+  last_message: DmMessage | null;
+  unread_count: number;
+  updated_at: string | null;
+}
+
+/**
+ * Deterministic, order-independent thread key for a pair of user keys.
+ * Mirrors the backend's `pair_key` (sorted, '::'-joined).
+ */
+export function dmPairKey(a: string, b: string): string {
+  return [a, b].sort().join('::');
+}
+
+function requireAppScope(config?: FlowstackClientConfig): string {
+  const scope = config?.appScope;
+  if (!scope) {
+    throw new Error('Private messaging requires an app scope (built-app context).');
+  }
+  return scope;
+}
+
+/** List the caller's threads (counterpart key, last message, unread count). */
+export async function listThreads(
+  credentials: FlowstackCredentials,
+  config?: FlowstackClientConfig,
+): Promise<ApiResponse<{ threads: DmThread[]; count: number }>> {
+  const scope = requireAppScope(config);
+  return flowstackFetch<{ threads: DmThread[]; count: number }>(
+    `/apps/${encodeURIComponent(scope)}/threads`,
+    { credentials },
+    config,
+  );
+}
+
+/** List messages in the caller's thread with `withUserKey`. ACL'd server-side. */
+export async function listMessages(
+  credentials: FlowstackCredentials,
+  withUserKey: string,
+  options?: { limit?: number; before?: string },
+  config?: FlowstackClientConfig,
+): Promise<ApiResponse<{ messages: DmMessage[]; count: number }>> {
+  const scope = requireAppScope(config);
+  const params = new URLSearchParams();
+  params.set('with', withUserKey);
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.before) params.set('before', options.before);
+  return flowstackFetch<{ messages: DmMessage[]; count: number }>(
+    `/apps/${encodeURIComponent(scope)}/messages?${params.toString()}`,
+    { credentials },
+    config,
+  );
+}
+
+/** Send a message to `toUserKey`. 403 unless the thread is mutually open. */
+export async function sendMessage(
+  credentials: FlowstackCredentials,
+  toUserKey: string,
+  body: string,
+  config?: FlowstackClientConfig,
+): Promise<ApiResponse<{ message_id: string; created_at: string }>> {
+  const scope = requireAppScope(config);
+  return flowstackFetch<{ message_id: string; created_at: string }>(
+    `/apps/${encodeURIComponent(scope)}/messages`,
+    { method: 'POST', credentials, body: { to_user_key: toUserKey, body } },
+    config,
+  );
+}
+
+/**
+ * Record the caller's consent to open a thread with `withUserKey`.
+ * The thread becomes `open` (sendable) only once BOTH parties have consented.
+ */
+export async function openThread(
+  credentials: FlowstackCredentials,
+  withUserKey: string,
+  config?: FlowstackClientConfig,
+): Promise<ApiResponse<{ pair_key: string; status: string }>> {
+  const scope = requireAppScope(config);
+  const me = credentials.userId;
+  if (!me) throw new Error('openThread requires an authenticated user.');
+  const pk = dmPairKey(me, withUserKey);
+  return flowstackFetch<{ pair_key: string; status: string }>(
+    `/apps/${encodeURIComponent(scope)}/threads/${encodeURIComponent(pk)}/consent`,
+    { method: 'POST', credentials },
+    config,
+  );
+}
+
+/** Mark a received message as read (recipient only). */
+export async function markMessageRead(
+  credentials: FlowstackCredentials,
+  messageId: string,
+  config?: FlowstackClientConfig,
+): Promise<ApiResponse<{ message_id: string; read: boolean }>> {
+  const scope = requireAppScope(config);
+  return flowstackFetch<{ message_id: string; read: boolean }>(
+    `/apps/${encodeURIComponent(scope)}/messages/${encodeURIComponent(messageId)}/read`,
+    { method: 'POST', credentials },
+    config,
+  );
+}
+
+// =============================================================================
 // Direct Tool Invocation
 // =============================================================================
 
