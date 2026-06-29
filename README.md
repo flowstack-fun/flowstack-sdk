@@ -1553,6 +1553,83 @@ Return value:
 
 ---
 
+## Private Messaging (DMs)
+
+Built-app users can exchange private, one-to-one messages. The DM store is **server-owned and ACL'd**: the backend pins `from` to the caller's JWT identity, only ever returns threads the caller participates in, and gates sends on a **mutually-consented (open) thread** — neither party ever learns the other's contact details.
+
+Private messaging is a **built-app capability**. It requires an `appScope` on the `FlowstackProvider` config; in a Casino personal session the backend returns 403. All symbols below ship in **0.2.2+**.
+
+> **Security:** message bodies are UNTRUSTED user input. Render them as plain text or sanitized markdown — never as raw HTML (no `dangerouslySetInnerHTML`). If a body is ever passed to an agent, treat it as data, not instructions.
+
+### useThreads — list a user's threads
+
+```tsx
+import { useThreads } from 'flowstack-sdk';
+
+const { threads, isLoading, error, refresh, openThread } = useThreads({
+  refreshInterval: 5000, // optional auto-poll (ms); off by default
+});
+
+// Each thread: { pair_key, with_user_key, status: 'pending' | 'open', last_message, unread_count, updated_at }
+threads.map((t) => <ThreadRow key={t.pair_key} counterpart={t.with_user_key} unread={t.unread_count} />);
+
+// Consent to open a thread — becomes sendable only once BOTH parties consent.
+const status = await openThread(otherUserKey); // 'pending' | 'open' | null
+```
+
+### useMessages — read + send within one thread
+
+```tsx
+import { useMessages } from 'flowstack-sdk';
+
+const { messages, send, isLoading, error, refresh } = useMessages(counterpartUserKey, {
+  limit: 50,           // default 50, max 200
+  refreshInterval: 4000,
+});
+
+await send('hey there'); // 403 / error if the thread is not yet mutually open
+messages.map((m) => <Bubble key={m.message_id} mine={m.from === myKey}>{m.body}</Bubble>);
+```
+
+### Client functions (non-React)
+
+All take `(credentials, …, config)` where `config` must carry `appScope`. Each returns an `ApiResponse<T>` (`{ ok, data, error }`), except `dmPairKey` which is a pure helper.
+
+```ts
+import {
+  listThreads,      // (creds, config) → { threads: DmThread[]; count }
+  listMessages,     // (creds, withUserKey, { limit?, before? }, config) → { messages: DmMessage[]; count }
+  sendMessage,      // (creds, toUserKey, body, config) → { message_id, created_at }  — 403 unless thread open
+  openThread,       // (creds, withUserKey, config) → { pair_key, status }  — record caller's consent
+  markMessageRead,  // (creds, messageId, config) → { message_id, read }  — recipient only
+  dmPairKey,        // (a, b) → string  — deterministic, order-independent thread key (sorted, '::'-joined)
+} from 'flowstack-sdk';
+```
+
+**Types:**
+
+```ts
+interface DmMessage {
+  message_id: string;
+  from: string;
+  to: string;
+  body: string;        // UNTRUSTED — render as text, never raw HTML
+  created_at: string;
+  read_at: string | null;
+}
+
+interface DmThread {
+  pair_key: string;
+  with_user_key: string;
+  status: 'pending' | 'open';
+  last_message: DmMessage | null;
+  unread_count: number;
+  updated_at: string | null;
+}
+```
+
+---
+
 ## Components
 
 ### Pre-built Page Components

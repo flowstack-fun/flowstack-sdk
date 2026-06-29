@@ -8,3 +8,4 @@ examples/simple-chat/.next/
 .next/
 .obsidian/
 .secure-ai-app.json
+*.tgz
