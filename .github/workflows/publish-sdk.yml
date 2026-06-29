@@ -1,0 +1,64 @@
+name: Publish SDK to CDN
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build SDK
+        run: npm run build
+
+      - name: Pack tarball
+        run: npm pack
+
+      - name: Extract version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Upload tarball to S3
+        run: |
+          TARBALL="flowstack-sdk-${{ steps.version.outputs.version }}.tgz"
+          # Upload versioned tarball
+          aws s3 cp "$TARBALL" "s3://sage-data-science-unified/sdk/$TARBALL" --content-type application/gzip
+          # Upload as latest
+          aws s3 cp "$TARBALL" "s3://sage-data-science-unified/sdk/flowstack-sdk-latest.tgz" --content-type application/gzip
+          # Upload README for agent reference
+          aws s3 cp README.md "s3://sage-data-science-unified/sdk/README.md" --content-type text/markdown
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Aliases.Items, 'sagecdn.flowstack.fun')].Id" --output text)
+          if [ -n "$DIST_ID" ]; then
+            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/sdk/*"
+            echo "Invalidated CloudFront distribution: $DIST_ID"
+          else
+            echo "Warning: Could not find CloudFront distribution for sagecdn.flowstack.fun"
+          fi
+
+      - name: Verify upload
+        run: |
+          echo "Uploaded:"
+          aws s3 ls "s3://sage-data-science-unified/sdk/" --human-readable
+          echo ""
+          echo "CDN URL: https://sagecdn.flowstack.fun/sdk/flowstack-sdk-latest.tgz"
+          echo "Versioned: https://sagecdn.flowstack.fun/sdk/flowstack-sdk-${{ steps.version.outputs.version }}.tgz"
+          echo "README: https://sagecdn.flowstack.fun/sdk/README.md"

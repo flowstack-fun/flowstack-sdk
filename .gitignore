@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+.env*
+examples/simple-chat/node_modules/
+examples/simple-chat/.next/
+*.tsbuildinfo
+.vercel
+.next/
+.obsidian/
+.secure-ai-app.json
