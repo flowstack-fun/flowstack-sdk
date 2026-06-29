@@ -2,6 +2,19 @@
 
 Complete Backend-as-a-Service SDK for AI-powered applications. Build full-stack AI apps with authentication, workspace management, dataset handling, AI agent integration, published sites, and wallet-based payments — all in one package.
 
+```bash
+npm install flowstack-sdk
+```
+
+## Documentation
+
+- 📖 **Docs site:** https://flowstack.fun/docs — browsable reference for every hook, component, and utility.
+- 🔌 **REST & SSE API:** https://flowstack.fun/openapi.json (OpenAPI 3.1) · human view: https://flowstack.fun/docs/rest-api
+- 🤖 **For LLMs & coding agents:** https://flowstack.fun/llms.txt (index) · https://flowstack.fun/llms-full.txt (full corpus)
+- 🧠 **Machine-readable:** [semantic graph](https://flowstack.fun/graph.jsonld) · [search index](https://flowstack.fun/search-index.json) · [registry JSON](https://flowstack.fun/api/registry.json)
+
+The docs site is generated from a canonical registry, so the human docs, the agent-readable corpus, the semantic graph, and the API contract never drift apart. This README is the canonical source for the SDK reference.
+
 ---
 
 ## MCP Build Agent — Required Pre-Flight Checklist

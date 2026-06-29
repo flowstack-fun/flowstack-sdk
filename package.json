@@ -103,7 +103,7 @@
     "type": "git",
     "url": "https://github.com/flowstack-fun/flowstack-sdk"
   },
-  "homepage": "https://flowstack.fun",
+  "homepage": "https://flowstack.fun/docs",
   "bugs": {
     "url": "https://github.com/flowstack-fun/flowstack-sdk/issues"
   }
