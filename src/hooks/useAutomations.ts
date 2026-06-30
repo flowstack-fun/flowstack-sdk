@@ -164,7 +164,9 @@ export function useAutomations(): UseAutomationsReturn {
       const res = await fetch(`${base}/automations`, { headers: headers() });
       if (!res.ok) { setError(`Failed to load automations (${res.status})`); return; }
       const data = await res.json();
-      setAutomations(data.automations ?? []);
+      // Backend returns a bare array (response_model=List[AutomationOut]).
+      // Tolerate a future `{automations:[...]}` envelope too.
+      setAutomations(Array.isArray(data) ? data : (data.automations ?? []));
     } catch (e: any) {
       setError(e.message || 'Failed to load automations');
     } finally {
@@ -257,7 +259,8 @@ export function useAutomations(): UseAutomationsReturn {
       const res = await fetch(url, { headers: headers() });
       if (!res.ok) return [];
       const data = await res.json();
-      return data.runs ?? [];
+      // Backend returns a bare array (response_model=List[AutomationRunOut]).
+      return Array.isArray(data) ? data : (data.runs ?? []);
     } catch { return []; }
   }, [creds?.apiKey, base]);
 

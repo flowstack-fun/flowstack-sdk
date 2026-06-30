@@ -7090,7 +7090,7 @@ function useAutomations() {
         return;
       }
       const data = await res.json();
-      setAutomations(data.automations ?? []);
+      setAutomations(Array.isArray(data) ? data : data.automations ?? []);
     } catch (e) {
       setError(e.message || "Failed to load automations");
     } finally {
@@ -7189,7 +7189,7 @@ function useAutomations() {
       const res = await fetch(url, { headers: headers() });
       if (!res.ok) return [];
       const data = await res.json();
-      return data.runs ?? [];
+      return Array.isArray(data) ? data : data.runs ?? [];
     } catch {
       return [];
     }
