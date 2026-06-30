@@ -1,5 +1,9 @@
 # Flowstack SDK
 
+[![npm version](https://img.shields.io/npm/v/flowstack-sdk.svg)](https://www.npmjs.com/package/flowstack-sdk)
+[![npm downloads](https://img.shields.io/npm/dm/flowstack-sdk.svg)](https://www.npmjs.com/package/flowstack-sdk)
+[![license](https://img.shields.io/npm/l/flowstack-sdk.svg)](https://www.npmjs.com/package/flowstack-sdk)
+
 Complete Backend-as-a-Service SDK for AI-powered applications. Build full-stack AI apps with authentication, workspace management, dataset handling, AI agent integration, published sites, and wallet-based payments — all in one package.
 
 ```bash
