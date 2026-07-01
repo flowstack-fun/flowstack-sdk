@@ -514,6 +514,7 @@ export type StreamEventType =
   | 'tool_result'
   | 'visualization'
   | 'progress'
+  | 'stage'
   | 'credit_status'
   | 'budget_update'
   | 'complete'

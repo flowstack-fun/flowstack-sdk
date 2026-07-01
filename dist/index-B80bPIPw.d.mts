@@ -410,7 +410,7 @@ interface StreamEvent {
     message?: string;
     percentage?: number;
 }
-type StreamEventType = 'content' | 'text' | 'delta' | 'metadata' | 'tool_call' | 'tool_use' | 'tool_result' | 'visualization' | 'progress' | 'credit_status' | 'budget_update' | 'complete' | 'done' | 'error' | 'interrupt';
+type StreamEventType = 'content' | 'text' | 'delta' | 'metadata' | 'tool_call' | 'tool_use' | 'tool_result' | 'visualization' | 'progress' | 'stage' | 'credit_status' | 'budget_update' | 'complete' | 'done' | 'error' | 'interrupt';
 interface InterruptInfo {
     reason: string;
     timestamp?: number;

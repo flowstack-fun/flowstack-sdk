@@ -3003,6 +3003,11 @@ function normalizeEventType(type) {
     "progress": "progress",
     "step": "progress",
     // Step-based progress alias
+    // Build pipeline stage markers (harness emits {type:"stage", name:"plan"|…}).
+    // Without this they fell through to 'content' and were dropped, so the build
+    // UI's stage bar never advanced. useAgent's `case 'stage'` maps them to the
+    // running tool call's agentResponse as `[<tool>] stage: <name>`.
+    "stage": "stage",
     // Billing
     "credit_status": "credit_status",
     "credits": "credit_status",
@@ -4016,6 +4021,39 @@ ${prompt}`;
               }
             }
             break;
+          // ── BUILD PIPELINE STAGE MARKERS ─────────────────────────────
+          // The build harness emits {type:"stage", name:"plan"|"style"|
+          // "build"|"verify"|"publish"} as the app progresses. Surface each
+          // as a `[<tool>] stage: <name>` line on the running build tool's
+          // agentResponse so the Casino build UI's stage bar can advance.
+          // Without this these events fell through to 'content' and were
+          // dropped, leaving the bar stuck on "Building…".
+          // (normalizeEvent maps the event's `name` field onto `tool`.)
+          case "stage": {
+            const stageName = event.tool || event.data?.name;
+            if (stageName && currentToolCalls.length > 0) {
+              let idx = -1;
+              for (let i = currentToolCalls.length - 1; i >= 0; i--) {
+                if (currentToolCalls[i].status === "running") {
+                  idx = i;
+                  break;
+                }
+              }
+              if (idx >= 0) {
+                const marker = `[${currentToolCalls[idx].name}] stage: ${stageName}`;
+                const prev = currentToolCalls[idx].agentResponse || "";
+                if (!prev.endsWith(marker)) {
+                  currentToolCalls[idx] = {
+                    ...currentToolCalls[idx],
+                    agentResponse: prev + (prev.length > 0 ? "\n" : "") + marker
+                  };
+                  setToolCalls([...currentToolCalls]);
+                  updateMessage(assistantId, { toolCalls: [...currentToolCalls] });
+                }
+              }
+            }
+            break;
+          }
           // ── VISUALIZATIONS ─────────────────────────────────────────
           case "visualization":
             if (event.data) {

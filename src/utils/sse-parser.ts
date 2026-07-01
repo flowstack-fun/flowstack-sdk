@@ -271,6 +271,12 @@ function normalizeEventType(type: string): StreamEventType {
     'progress': 'progress',
     'step': 'progress',         // Step-based progress alias
 
+    // Build pipeline stage markers (harness emits {type:"stage", name:"plan"|…}).
+    // Without this they fell through to 'content' and were dropped, so the build
+    // UI's stage bar never advanced. useAgent's `case 'stage'` maps them to the
+    // running tool call's agentResponse as `[<tool>] stage: <name>`.
+    'stage': 'stage',
+
     // Billing
     'credit_status': 'credit_status',
     'credits': 'credit_status', // Shorthand alias

@@ -779,6 +779,39 @@ export function useAgent(template: AgentTemplate = 'data-science', options?: Use
             }
             break;
 
+          // ── BUILD PIPELINE STAGE MARKERS ─────────────────────────────
+          // The build harness emits {type:"stage", name:"plan"|"style"|
+          // "build"|"verify"|"publish"} as the app progresses. Surface each
+          // as a `[<tool>] stage: <name>` line on the running build tool's
+          // agentResponse so the Casino build UI's stage bar can advance.
+          // Without this these events fell through to 'content' and were
+          // dropped, leaving the bar stuck on "Building…".
+          // (normalizeEvent maps the event's `name` field onto `tool`.)
+          case 'stage': {
+            const stageName = (event.tool
+              || (event.data as Record<string, unknown> | undefined)?.name) as string | undefined;
+            if (stageName && currentToolCalls.length > 0) {
+              let idx = -1;
+              for (let i = currentToolCalls.length - 1; i >= 0; i--) {
+                if (currentToolCalls[i].status === 'running') { idx = i; break; }
+              }
+              if (idx >= 0) {
+                const marker = `[${currentToolCalls[idx].name}] stage: ${stageName}`;
+                const prev = currentToolCalls[idx].agentResponse || '';
+                // Skip a duplicate trailing marker (harness may repeat a stage).
+                if (!prev.endsWith(marker)) {
+                  currentToolCalls[idx] = {
+                    ...currentToolCalls[idx],
+                    agentResponse: prev + (prev.length > 0 ? '\n' : '') + marker,
+                  };
+                  setToolCalls([...currentToolCalls]);
+                  updateMessage(assistantId, { toolCalls: [...currentToolCalls] });
+                }
+              }
+            }
+            break;
+          }
+
           // ── VISUALIZATIONS ─────────────────────────────────────────
           case 'visualization':
             if (event.data) {
