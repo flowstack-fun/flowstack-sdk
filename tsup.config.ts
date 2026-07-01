@@ -11,6 +11,10 @@ export default defineConfig({
     '@privy-io/react-auth', '@privy-io/wagmi',
     'wagmi', '@wagmi/core', '@wagmi/connectors',
     'viem', '@tanstack/react-query',
+    // P0-150 FR1: mermaid is an OPTIONAL peer dep, loaded via a non-analyzable
+    // dynamic import in MermaidDiagram.tsx. Keep it external so neither this build
+    // nor a consumer's Rollup tries to resolve it.
+    'mermaid',
     // Node.js-only — kept external so browser bundles don't pull them in
     // Only used by @flowstack/sdk/api entry point (server-side route generators)
     'jsonwebtoken', 'crypto',

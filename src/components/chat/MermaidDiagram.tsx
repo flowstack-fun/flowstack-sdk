@@ -30,7 +30,15 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
 
     async function render() {
       try {
-        const mermaid = (await import('mermaid')).default;
+        // P0-150 FR1: `mermaid` is an OPTIONAL peer dependency (see package.json).
+        // Use a non-statically-analyzable specifier so a consumer's Rollup/Vite
+        // build does NOT try to resolve `mermaid` at build time — that undeclared
+        // static `import('mermaid')` was the root cause of "Rollup failed to resolve
+        // import mermaid" in every SDK consumer (P0-149 papered over it app-side with
+        // `external: ['mermaid']`). Apps that want diagram rendering install `mermaid`;
+        // apps that don't fall through to the graceful fallback below via catch.
+        const mermaidPkg = 'mermaid';
+        const mermaid = (await import(/* @vite-ignore */ mermaidPkg)).default;
 
         if (!mermaidInitialized) {
           mermaid.initialize({

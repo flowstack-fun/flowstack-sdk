@@ -8753,7 +8753,11 @@ function MermaidDiagram({ code }) {
     let cancelled = false;
     async function render() {
       try {
-        const mermaid = (await import('mermaid')).default;
+        const mermaidPkg = "mermaid";
+        const mermaid = (await import(
+          /* @vite-ignore */
+          mermaidPkg
+        )).default;
         if (!mermaidInitialized) {
           mermaid.initialize({
             startOnLoad: false,
