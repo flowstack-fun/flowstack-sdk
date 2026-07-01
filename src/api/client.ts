@@ -616,7 +616,37 @@ export async function executeQueryWithConfig(
   });
 
   if (!response.ok) {
-    throw new Error(`Query failed: ${response.statusText}`);
+    // Surface the structured error body instead of discarding it. The credit
+    // gate (402) returns { code, error, deposited_wei, wallet_wei, needs_deposit,
+    // required_wei, credit_cost, ... }; FastAPI validation/other errors return
+    // { detail: ... }. Attach code/status/fields so callers can react (e.g. show
+    // a deposit shortcut) rather than rendering a bare "Query failed".
+    let message = response.statusText || 'request failed';
+    let code: string | undefined;
+    let body: any;
+    try {
+      body = await response.clone().json();
+      const payload = (body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'object')
+        ? body.detail
+        : body;
+      if (payload && typeof payload === 'object') {
+        code = payload.code;
+        message = payload.error || payload.message || payload.detail || message;
+      } else if (typeof payload === 'string') {
+        message = payload;
+      }
+    } catch {
+      /* non-JSON error body — keep statusText */
+    }
+    const err = new Error(`Query failed: ${message}`) as Error & {
+      status?: number;
+      code?: string;
+      body?: unknown;
+    };
+    err.status = response.status;
+    err.code = code;
+    err.body = body;
+    throw err;
   }
 
   return response;

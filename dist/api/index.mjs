@@ -262,7 +262,25 @@ async function executeQueryWithConfig(credentials, query, workspaceId, options, 
     })
   });
   if (!response.ok) {
-    throw new Error(`Query failed: ${response.statusText}`);
+    let message = response.statusText || "request failed";
+    let code;
+    let body;
+    try {
+      body = await response.clone().json();
+      const payload = body && typeof body === "object" && "detail" in body && typeof body.detail === "object" ? body.detail : body;
+      if (payload && typeof payload === "object") {
+        code = payload.code;
+        message = payload.error || payload.message || payload.detail || message;
+      } else if (typeof payload === "string") {
+        message = payload;
+      }
+    } catch {
+    }
+    const err = new Error(`Query failed: ${message}`);
+    err.status = response.status;
+    err.code = code;
+    err.body = body;
+    throw err;
   }
   return response;
 }
